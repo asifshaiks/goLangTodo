@@ -1,8 +1,6 @@
 // ================== internal/features/auth/handler.go ==================
 package auth
 
-// Swagger API metadata is defined globally in cmd/api/main.go
-
 import (
 	"net/http"
 
@@ -26,17 +24,7 @@ func NewHandler(repo *Repository) *Handler {
 	}
 }
 
-// Register godoc
-// @Summary Register a new user
-// @Description Register a new user with email, password, and name
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body RegisterRequest true "User registration data"
-// @Success 201 {object} AuthResponse
-// @Failure 400 {object} response.ErrorResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /auth/register [post]
+// Register a new user
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -92,18 +80,7 @@ func (h *Handler) Register(c *gin.Context) {
 	})
 }
 
-// Login godoc
-// @Summary Login user
-// @Description Authenticate user with email and password
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body LoginRequest true "User login credentials"
-// @Success 200 {object} AuthResponse
-// @Failure 400 {object} response.ErrorResponse
-// @Failure 401 {object} response.ErrorResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /auth/login [post]
+// Login user
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -146,18 +123,7 @@ func (h *Handler) Login(c *gin.Context) {
 	})
 }
 
-// Me godoc
-// @Summary Get current user profile
-// @Description Get the profile of the currently authenticated user
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} response.ErrorResponse
-// @Failure 404 {object} response.ErrorResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /auth/me [get]
+// Me returns current user profile
 func (h *Handler) Me(c *gin.Context) {
 	userID := c.GetString("userID")
 

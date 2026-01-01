@@ -8,7 +8,7 @@ import (
 )
 
 // User represents a user in the system
-// @Description User account information
+// User represents a user in the system
 type User struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id" example:"507f1f77bcf86cd799439011"`
 	Email     string             `bson:"email" json:"email" example:"user@example.com"`
@@ -19,14 +19,14 @@ type User struct {
 }
 
 // LoginRequest represents login credentials
-// @Description User login request data
+// LoginRequest represents login credentials
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required" example:"user@example.com"`
 	Password string `json:"password" binding:"required" example:"secret123"`
 }
 
 // RegisterRequest represents user registration data
-// @Description User registration request data
+// RegisterRequest represents user registration data
 type RegisterRequest struct {
 	Email    string `json:"email" binding:"required" example:"user@example.com"`
 	Password string `json:"password" binding:"required,min=6" example:"secret123"`
@@ -34,7 +34,7 @@ type RegisterRequest struct {
 }
 
 // AuthResponse represents authentication response
-// @Description Authentication response with token and user data
+// AuthResponse represents authentication response
 type AuthResponse struct {
 	Token string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
 	User  *User  `json:"user"`
