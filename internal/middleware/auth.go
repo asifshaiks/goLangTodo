@@ -1,43 +1,49 @@
-// ================== internal/middleware/auth.go ==================
 package middleware
 
 import (
 	"strings"
 
-	"github.com/xyz-asif/gotodo/internal/pkg/response"
-	"github.com/xyz-asif/gotodo/internal/pkg/token"
-
 	"github.com/gin-gonic/gin"
+	"github.com/xyz-asif/gotodo/internal/config"
+	"github.com/xyz-asif/gotodo/internal/features/auth"
+
+	"github.com/xyz-asif/gotodo/internal/pkg/response"
 )
 
-func Auth() gin.HandlerFunc {
+// NewAuthMiddleware creates a Gin middleware for JWT authentication
+func NewAuthMiddleware(repo *auth.Repository, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			response.Unauthorized(c, "Authorization header required")
+			response.Unauthorized(c, "Authorization header required", "AUTH_REQUIRED")
 			c.Abort()
 			return
 		}
 
-		// Support both "Bearer <token>" (case-insensitive) and raw token in header
-		fields := strings.Fields(authHeader)
-		var tokenString string
-		if len(fields) == 2 && strings.EqualFold(fields[0], "Bearer") {
-			tokenString = fields[1]
-		} else {
-			// Treat the entire header value as the token
-			tokenString = authHeader
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			response.Unauthorized(c, "Invalid authorization format", "INVALID_AUTH_FORMAT")
+			c.Abort()
+			return
 		}
 
-		claims, err := token.ValidateToken(tokenString)
+		tokenString := parts[1]
+		userID, err := auth.ValidateJWT(tokenString, cfg)
 		if err != nil {
-			response.Unauthorized(c, "Invalid token")
+			response.Unauthorized(c, "Invalid or expired token", "INVALID_TOKEN")
 			c.Abort()
 			return
 		}
 
-		c.Set("userID", claims.UserID)
-		c.Set("email", claims.Email)
+		user, err := repo.GetUserByID(c.Request.Context(), userID)
+		if err != nil {
+			// differentiate between db error and not found if possible, but 401 is safest for auth
+			response.Unauthorized(c, "User not found", "USER_NOT_FOUND")
+			c.Abort()
+			return
+		}
+
+		c.Set("user", user)
 		c.Next()
 	}
 }
