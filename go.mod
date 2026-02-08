@@ -1,4 +1,4 @@
-module github.com/xyz-asif/gotodo
+// module github.com/xyz-asif/gotodo
 
 go 1.24.0
 
@@ -18,11 +18,6 @@ require (
 )
 
 require (
-<<<<<<< HEAD
-	github.com/kr/pretty v0.3.1 // indirect
-	github.com/rogpeppe/go-internal v1.11.0 // indirect
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
-=======
 	cel.dev/expr v0.24.0 // indirect
 	cloud.google.com/go v0.121.0 // indirect
 	cloud.google.com/go/auth v0.17.0 // indirect
@@ -83,7 +78,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20251022142026-3a174f9686a8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251213004720-97cd9d5aeac2 // indirect
 	google.golang.org/grpc v1.77.0 // indirect
->>>>>>> enhnce
 )
 
 require (
