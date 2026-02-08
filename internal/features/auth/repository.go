@@ -1,9 +1,10 @@
-// ================== internal/features/auth/repository.go ==================
 package auth
 
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -12,48 +13,110 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// Repository handles database interactions for the auth feature
 type Repository struct {
-	collection *mongo.Collection
+	collection              *mongo.Collection
+	refreshTokensCollection *mongo.Collection
 }
 
+// NewRepository initializes the repository and creates necessary indexes
 func NewRepository(db *mongo.Database) *Repository {
 	collection := db.Collection("users")
 
-	// Create unique index on email
-	indexModel := mongo.IndexModel{
-		Keys:    bson.D{{Key: "email", Value: 1}},
-		Options: options.Index().SetUnique(true),
+	// Create indexes
+	_, _ = collection.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "googleId", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "email", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "username", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			// Text index for search
+			Keys: bson.D{
+				{Key: "username", Value: "text"},
+				{Key: "displayName", Value: "text"},
+				{Key: "bio", Value: "text"},
+			},
+			Options: options.Index().
+				SetWeights(bson.D{
+					{Key: "username", Value: 10},
+					{Key: "displayName", Value: 5},
+					{Key: "bio", Value: 1},
+				}).
+				SetName("user_text_search"),
+		},
+	})
+
+	refreshTokensCollection := db.Collection("refresh_tokens")
+	// Create indexes for refresh tokens
+	_, _ = refreshTokensCollection.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "tokenId", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys: bson.D{{Key: "userId", Value: 1}},
+		},
+		{
+			Keys:    bson.D{{Key: "expiresAt", Value: 1}},
+			Options: options.Index().SetExpireAfterSeconds(0), // TTL index
+		},
+	})
+
+	return &Repository{
+		collection:              collection,
+		refreshTokensCollection: refreshTokensCollection,
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	collection.Indexes().CreateOne(ctx, indexModel)
-
-	return &Repository{collection: collection}
 }
 
-func (r *Repository) Create(ctx context.Context, user *User) error {
+// CreateUser inserts a new user into the database
+func (r *Repository) CreateUser(ctx context.Context, user *User) error {
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
 
 	result, err := r.collection.InsertOne(ctx, user)
 	if err != nil {
+		// Check for duplicate key error (code 11000)
 		if mongo.IsDuplicateKeyError(err) {
-			return errors.New("Email already exists")
+			// Return the original error wrapped so we can see which key was duplicated in logs
+			return fmt.Errorf("user duplicate key error: %w", err)
 		}
 		return err
 	}
 
-	user.ID = result.InsertedID.(primitive.ObjectID)
+	if oid, ok := result.InsertedID.(primitive.ObjectID); ok {
+		user.ID = oid
+	}
+
 	return nil
 }
 
-func (r *Repository) FindByEmail(ctx context.Context, email string) (*User, error) {
+// GetUserByGoogleID finds a user by their Google ID
+func (r *Repository) GetUserByGoogleID(ctx context.Context, googleID string) (*User, error) {
+	var user User
+	err := r.collection.FindOne(ctx, bson.M{"googleId": googleID}).Decode(&user)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, nil // Not found is not an error here
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUserByEmail finds a user by their email address
+func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	var user User
 	err := r.collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, nil
 		}
 		return nil, err
@@ -61,94 +124,245 @@ func (r *Repository) FindByEmail(ctx context.Context, email string) (*User, erro
 	return &user, nil
 }
 
-func (r *Repository) FindByID(ctx context.Context, id string) (*User, error) {
-	objectID, err := primitive.ObjectIDFromHex(id)
+// GetUserByUsername finds a user by their username
+func (r *Repository) GetUserByUsername(ctx context.Context, username string) (*User, error) {
+	var user User
+	err := r.collection.FindOne(ctx, bson.M{"username": username}).Decode(&user)
 	if err != nil {
-		return nil, errors.New("Invalid user ID")
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUserByID finds a user by their MongoDB ID
+func (r *Repository) GetUserByID(ctx context.Context, userID string) (*User, error) {
+	oid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, errors.New("invalid user id format")
 	}
 
 	var user User
-	err = r.collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&user)
+	err = r.collection.FindOne(ctx, bson.M{"_id": oid}).Decode(&user)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return nil, nil
-		}
-		return nil, err
+		return nil, err // Return error if not found as per requirement
 	}
 	return &user, nil
 }
 
-func (r *Repository) Update(ctx context.Context, id string, update bson.M) error {
-	objectID, err := primitive.ObjectIDFromHex(id)
+// UpdateUser updates specific fields of a user
+func (r *Repository) UpdateUser(ctx context.Context, userID string, updates map[string]interface{}) error {
+	oid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
-		return errors.New("Invalid user ID")
+		return errors.New("invalid user id format")
 	}
 
-	update["updatedAt"] = time.Now()
+	// Always update UpdatedAt
+	updates["updatedAt"] = time.Now()
 
-	result, err := r.collection.UpdateOne(
-		ctx,
-		bson.M{"_id": objectID},
-		bson.M{"$set": update},
-	)
+	filter := bson.M{"_id": oid}
+	update := bson.M{"$set": updates}
 
+	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
 
 	if result.MatchedCount == 0 {
-		return errors.New("User not found")
+		return errors.New("user not found")
 	}
 
 	return nil
 }
 
-func (r *Repository) Delete(ctx context.Context, id string) error {
-	objectID, err := primitive.ObjectIDFromHex(id)
+// UsernameExists checks if a username is already taken
+func (r *Repository) UsernameExists(ctx context.Context, username string) (bool, error) {
+	count, err := r.collection.CountDocuments(ctx, bson.M{"username": username})
 	if err != nil {
-		return errors.New("Invalid user ID")
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// IncrementAnchorCount increments or decrements the user's anchor count
+func (r *Repository) IncrementAnchorCount(ctx context.Context, userID primitive.ObjectID, delta int) error {
+	filter := bson.M{"_id": userID}
+	update := bson.M{
+		"$inc": bson.M{"anchorCount": delta},
+		"$set": bson.M{"updatedAt": time.Now()},
 	}
 
-	result, err := r.collection.DeleteOne(ctx, bson.M{
-		"_id": objectID,
-	})
-
+	result, err := r.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
 
-	if result.DeletedCount == 0 {
-		return errors.New("User not found")
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
 	}
 
 	return nil
 }
 
-func (r *Repository) List(ctx context.Context, limit int) ([]User, error) {
-	opts := options.Find()
-	opts.SetSort(bson.D{{Key: "createdAt", Value: -1}})
-	if limit > 0 {
-		opts.SetLimit(int64(limit))
+// IncrementFollowerCount increments or decrements a user's follower count
+func (r *Repository) IncrementFollowerCount(ctx context.Context, userID primitive.ObjectID, delta int) error {
+	filter := bson.M{"_id": userID}
+	update := bson.M{
+		"$inc": bson.M{"followerCount": delta},
+		"$set": bson.M{"updatedAt": time.Now()},
 	}
 
-	cursor, err := r.collection.Find(ctx, bson.M{}, opts)
+	result, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+// IncrementFollowingCount increments or decrements a user's following count
+func (r *Repository) IncrementFollowingCount(ctx context.Context, userID primitive.ObjectID, delta int) error {
+	filter := bson.M{"_id": userID}
+	update := bson.M{
+		"$inc": bson.M{"followingCount": delta},
+		"$set": bson.M{"updatedAt": time.Now()},
+	}
+
+	result, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("user not found")
+	}
+
+	return nil
+}
+
+// GetUsersByIDs fetches multiple users by their IDs (for enriching follow lists)
+func (r *Repository) GetUsersByIDs(ctx context.Context, userIDs []primitive.ObjectID) ([]User, error) {
+	if len(userIDs) == 0 {
+		return []User{}, nil
+	}
+
+	filter := bson.M{"_id": bson.M{"$in": userIDs}}
+	cursor, err := r.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
 
 	var users []User
-	if err := cursor.All(ctx, &users); err != nil {
+	if err = cursor.All(ctx, &users); err != nil {
 		return nil, err
-	}
-
-	if users == nil {
-		users = []User{}
 	}
 
 	return users, nil
 }
 
-func (r *Repository) Count(ctx context.Context) (int64, error) {
-	return r.collection.CountDocuments(ctx, bson.M{})
+// GetUserByObjectID finds a user by their ObjectID directly
+func (r *Repository) GetUserByObjectID(ctx context.Context, userID primitive.ObjectID) (*User, error) {
+	var user User
+	err := r.collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&user)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUsersByUsernames retrieves users by their usernames (for mention validation)
+func (r *Repository) GetUsersByUsernames(ctx context.Context, usernames []string) ([]User, error) {
+	if len(usernames) == 0 {
+		return []User{}, nil
+	}
+
+	// Normalize to lowercase
+	normalizedUsernames := make([]string, len(usernames))
+	for i, u := range usernames {
+		normalizedUsernames[i] = strings.ToLower(u)
+	}
+
+	filter := bson.M{
+		"username": bson.M{"$in": normalizedUsernames},
+	}
+
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []User
+	if err = cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// GetUserIDsByUsernames returns map of username -> userID for valid usernames
+func (r *Repository) GetUserIDsByUsernames(ctx context.Context, usernames []string) (map[string]primitive.ObjectID, error) {
+	users, err := r.GetUsersByUsernames(ctx, usernames)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]primitive.ObjectID)
+	for _, user := range users {
+		result[strings.ToLower(user.Username)] = user.ID
+	}
+
+	return result, nil
+}
+
+// SaveRefreshToken stores a new refresh token session
+func (r *Repository) SaveRefreshToken(ctx context.Context, session *RefreshTokenSession) error {
+	_, err := r.refreshTokensCollection.InsertOne(ctx, session)
+	return err
+}
+
+// GetRefreshToken retrieves a refresh token session by its TokenID (JTI)
+func (r *Repository) GetRefreshToken(ctx context.Context, tokenID string) (*RefreshTokenSession, error) {
+	var session RefreshTokenSession
+	err := r.refreshTokensCollection.FindOne(ctx, bson.M{"tokenId": tokenID}).Decode(&session)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &session, nil
+}
+
+// RevokeRefreshToken revokes a specific refresh token (marks as revoked or deletes)
+// We'll delete it since we have revocation logs if needed, or just standard logout behavior.
+// If we want to keep history, we'd mark revoked=true. But TTL will kill it anyway.
+// Let's delete it for "Logout".
+func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenID string) error {
+	_, err := r.refreshTokensCollection.DeleteOne(ctx, bson.M{"tokenId": tokenID})
+	return err
+}
+
+// RevokeAllUserTokens revokes all refresh tokens for a user (Logout All Devices)
+func (r *Repository) RevokeAllUserTokens(ctx context.Context, userID primitive.ObjectID) error {
+	_, err := r.refreshTokensCollection.DeleteMany(ctx, bson.M{"userId": userID})
+	return err
+}
+
+// DeleteUser permanently removes a user from the database
+func (r *Repository) DeleteUser(ctx context.Context, userID primitive.ObjectID) error {
+	// Also delete all refresh tokens
+	_ = r.RevokeAllUserTokens(ctx, userID)
+	_, err := r.collection.DeleteOne(ctx, bson.M{"_id": userID})
+	return err
 }

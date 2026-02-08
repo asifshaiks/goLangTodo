@@ -1,4 +1,3 @@
-// ================== internal/features/auth/model.go ==================
 package auth
 
 import (
@@ -7,17 +6,37 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+<<<<<<< HEAD
 // User represents a user in the system
 // User represents a user in the system
+=======
+// User represents a registered user in the system
+>>>>>>> enhnce
 type User struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id" example:"507f1f77bcf86cd799439011"`
-	Email     string             `bson:"email" json:"email" example:"user@example.com"`
-	Password  string             `bson:"password" json:"-"`
-	Name      string             `bson:"name" json:"name" example:"John Doe"`
-	CreatedAt time.Time          `bson:"createdAt" json:"createdAt" example:"2023-01-01T00:00:00Z"`
-	UpdatedAt time.Time          `bson:"updatedAt" json:"updatedAt" example:"2023-01-01T00:00:00Z"`
+	ID                     primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
+	GoogleID               string               `bson:"googleId" json:"googleId"`
+	Email                  string               `bson:"email" json:"email"`
+	Username               string               `bson:"username" json:"username"`
+	UsernameChanged        bool                 `bson:"usernameChanged" json:"usernameChanged"`
+	UsernameChangedAt      *time.Time           `bson:"usernameChangedAt" json:"usernameChangedAt"`
+	DisplayName            string               `bson:"displayName" json:"displayName"`
+	Bio                    string               `bson:"bio" json:"bio"`
+	ProfilePictureURL      string               `bson:"profilePictureUrl" json:"profilePictureUrl"`
+	ProfilePicturePublicID string               `bson:"profilePicturePublicId" json:"-"`
+	CoverImageURL          string               `bson:"coverImageUrl" json:"coverImageUrl"`
+	CoverImagePublicID     string               `bson:"coverImagePublicId" json:"-"`
+	FollowerCount          int                  `bson:"followerCount" json:"followerCount"`
+	FollowingCount         int                  `bson:"followingCount" json:"followingCount"`
+	AnchorCount            int                  `bson:"anchorCount" json:"anchorCount"`
+	IsVerified             bool                 `bson:"isVerified" json:"isVerified"`
+	JoinedAt               time.Time            `bson:"joinedAt" json:"joinedAt"`
+	CreatedAt              time.Time            `bson:"createdAt" json:"createdAt"`
+	UpdatedAt              time.Time            `bson:"updatedAt" json:"updatedAt"`
+	Interests              []string             `bson:"interests" json:"interests"`
+	BlockedUsers           []primitive.ObjectID `bson:"blockedUsers" json:"blockedUsers"`
 }
 
+<<<<<<< HEAD
 // LoginRequest represents login credentials
 // LoginRequest represents login credentials
 type LoginRequest struct {
@@ -35,7 +54,138 @@ type RegisterRequest struct {
 
 // AuthResponse represents authentication response
 // AuthResponse represents authentication response
+=======
+// GoogleAuthRequest represents the payload for Google OAuth login
+type GoogleAuthRequest struct {
+	GoogleIDToken string `json:"googleIdToken" binding:"required"`
+}
+
+// DevLoginRequest for development login (bypasses Google OAuth)
+type DevLoginRequest struct {
+	Email       string `json:"email" binding:"required,email"`
+	DisplayName string `json:"displayName"`
+}
+
+// RefreshTokenRequest represents the payload for refreshing access token
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refreshToken" binding:"required"`
+}
+
+// RefreshTokenSession represents a stored refresh token in the database
+type RefreshTokenSession struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID    primitive.ObjectID `bson:"userId" json:"userId"`
+	TokenID   string             `bson:"tokenId" json:"tokenId"` // JTI from the token
+	ExpiresAt time.Time          `bson:"expiresAt" json:"expiresAt"`
+	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
+	Revoked   bool               `bson:"revoked" json:"revoked"`
+	UserAgent string             `bson:"userAgent" json:"userAgent"`
+	IPAddress string             `bson:"ipAddress" json:"ipAddress"`
+}
+
+// AuthResponse represents the response after successful authentication
+>>>>>>> enhnce
 type AuthResponse struct {
-	Token string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
-	User  *User  `json:"user"`
+	User         *User  `json:"user"`
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
+}
+
+// LoginResponse represents the response for DevLogin
+type LoginResponse struct {
+	Token            string      `json:"token"` // Access Token
+	RefreshToken     string      `json:"refreshToken"`
+	User             interface{} `json:"user"`
+	IsNewUser        bool        `json:"isNewUser"`
+	RequiresUsername bool        `json:"requiresUsername"`
+}
+
+// UpdateProfileRequest represents the payload for updating user profile
+type UpdateProfileRequest struct {
+	DisplayName *string `json:"displayName" binding:"omitempty,min=2,max=50"`
+	Bio         *string `json:"bio" binding:"omitempty,max=200"`
+}
+
+// PublicProfileResponse represents a user's public profile
+type PublicProfileResponse struct {
+	ID                primitive.ObjectID `json:"id"`
+	Username          string             `json:"username"`
+	DisplayName       string             `json:"displayName"`
+	Bio               string             `json:"bio"`
+	ProfilePictureURL string             `json:"profilePictureUrl"`
+	CoverImageURL     string             `json:"coverImageUrl"`
+	FollowerCount     int                `json:"followerCount"`
+	FollowingCount    int                `json:"followingCount"`
+	AnchorCount       int                `json:"anchorCount"`
+	IsVerified        bool               `json:"isVerified"`
+	JoinedAt          time.Time          `json:"joinedAt"`
+	IsFollowing       bool               `json:"isFollowing"`
+	IsFollowedBy      bool               `json:"isFollowedBy"`
+	IsMutual          bool               `json:"isMutual"`
+}
+
+// OwnProfileResponse represents the user's own profile with private details
+type OwnProfileResponse struct {
+	ID                primitive.ObjectID `json:"id"`
+	GoogleID          string             `json:"googleId"`
+	Email             string             `json:"email"`
+	Username          string             `json:"username"`
+	DisplayName       string             `json:"displayName"`
+	Bio               string             `json:"bio"`
+	ProfilePictureURL string             `json:"profilePictureUrl"`
+	CoverImageURL     string             `json:"coverImageUrl"`
+	FollowerCount     int                `json:"followerCount"`
+	FollowingCount    int                `json:"followingCount"`
+	AnchorCount       int                `json:"anchorCount"`
+	IsVerified        bool               `json:"isVerified"`
+	JoinedAt          time.Time          `json:"joinedAt"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	UpdatedAt         time.Time          `json:"updatedAt"`
+}
+
+// ProfilePictureResponse represents the response after uploading a profile picture
+type ProfilePictureResponse struct {
+	ProfilePictureURL string `json:"profilePictureUrl"`
+}
+
+// CoverImageResponse represents the response after uploading a cover image
+type CoverImageResponse struct {
+	CoverImageURL string `json:"coverImageUrl"`
+}
+
+// PinnedAnchorResponse represents a pinned anchor in user profile
+type PinnedAnchorResponse struct {
+	ID              primitive.ObjectID `json:"id"`
+	Title           string             `json:"title"`
+	Description     string             `json:"description"`
+	CoverMediaType  string             `json:"coverMediaType"`
+	CoverMediaValue string             `json:"coverMediaValue"`
+	Visibility      string             `json:"visibility"`
+	ItemCount       int                `json:"itemCount"`
+	LikeCount       int                `json:"likeCount"`
+	CloneCount      int                `json:"cloneCount"`
+	CreatedAt       time.Time          `json:"createdAt"`
+}
+
+// UpdateUsernameRequest represents the payload for updating username
+type UpdateUsernameRequest struct {
+	Username string `json:"username" binding:"required,min=3,max=20"`
+}
+
+// ToPublicUser returns a map of user fields safe for public display
+func (u *User) ToPublicUser() map[string]interface{} {
+	return map[string]interface{}{
+		"id":                u.ID,
+		"username":          u.Username,
+		"displayName":       u.DisplayName,
+		"bio":               u.Bio,
+		"profilePictureUrl": u.ProfilePictureURL,
+		"followerCount":     u.FollowerCount,
+		"followingCount":    u.FollowingCount,
+		"anchorCount":       u.AnchorCount,
+		"isVerified":        u.IsVerified,
+		"joinedAt":          u.JoinedAt,
+		"createdAt":         u.CreatedAt,
+		"updatedAt":         u.UpdatedAt,
+	}
 }

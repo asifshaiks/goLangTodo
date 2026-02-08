@@ -1,78 +1,102 @@
-// ================== internal/features/auth/validator.go ==================
 package auth
 
 import (
 	"errors"
+	"mime/multipart"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
 
-var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-
-func ValidateRegister(req *RegisterRequest) error {
-	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
-	req.Name = strings.TrimSpace(req.Name)
-
-	if req.Email == "" {
-		return errors.New("Email is required")
+// ValidateUpdateProfileRequest validates the profile update request
+func ValidateUpdateProfileRequest(req *UpdateProfileRequest) error {
+	if req.DisplayName != nil {
+		if err := ValidateDisplayName(*req.DisplayName); err != nil {
+			return err
+		}
 	}
 
-	if !emailRegex.MatchString(req.Email) {
-		return errors.New("Invalid email format")
-	}
-
-	if len(req.Password) < 6 {
-		return errors.New("Password must be at least 6 characters")
-	}
-
-	if req.Name == "" {
-		return errors.New("Name is required")
-	}
-
-	if len(req.Name) < 2 {
-		return errors.New("Name must be at least 2 characters")
-	}
-
-	if len(req.Name) > 100 {
-		return errors.New("Name cannot exceed 100 characters")
+	if req.Bio != nil {
+		if err := ValidateBio(*req.Bio); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func ValidateLogin(req *LoginRequest) error {
-	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+// ValidateDisplayName validates the display name
+func ValidateDisplayName(displayName string) error {
+	if len(displayName) < 2 || len(displayName) > 50 {
+		return errors.New("display name must be between 2 and 50 characters")
+	}
+	return nil
+}
 
-	if req.Email == "" {
-		return errors.New("Email is required")
+// ValidateBio validates the bio
+func ValidateBio(bio string) error {
+	if len(bio) > 200 {
+		return errors.New("bio must not exceed 200 characters")
+	}
+	return nil
+}
+
+// ValidateUsername validates the username format
+func ValidateUsername(username string) error {
+	if len(username) < 3 || len(username) > 30 {
+		return errors.New("username must be between 3 and 30 characters")
 	}
 
-	if req.Password == "" {
-		return errors.New("Password is required")
+	// Alphanumeric and underscores only
+	match, _ := regexp.MatchString("^[a-zA-Z0-9_]+$", username)
+	if !match {
+		return errors.New("username can only contain letters, numbers, and underscores")
+	}
+	return nil
+}
+
+// ValidateProfilePicture validates the profile picture file
+func ValidateProfilePicture(file *multipart.FileHeader) error {
+	// Check file size (max 5MB)
+	if file.Size > 5*1024*1024 {
+		return errors.New("profile picture must be less than 5MB")
+	}
+
+	// Check file extension
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	validExts := map[string]bool{
+		".jpg":  true,
+		".jpeg": true,
+		".png":  true,
+		".webp": true,
+	}
+
+	if !validExts[ext] {
+		return errors.New("invalid file type. allowed: jpg, jpeg, png, webp")
 	}
 
 	return nil
 }
 
-// TranslateAuthError converts database errors to user-friendly messages
-func TranslateAuthError(err error) string {
-	if err == nil {
-		return ""
+// ValidateCoverImage validates the cover image file
+func ValidateCoverImage(file *multipart.FileHeader) error {
+	// Check file size (max 10MB)
+	if file.Size > 10*1024*1024 {
+		return errors.New("cover image must be less than 10MB")
 	}
 
-	errStr := err.Error()
-
-	if strings.Contains(errStr, "duplicate key") || strings.Contains(errStr, "already exists") {
-		return "Email already registered"
+	// Check file extension
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	validExts := map[string]bool{
+		".jpg":  true,
+		".jpeg": true,
+		".png":  true,
+		".webp": true,
 	}
 
-	if strings.Contains(errStr, "invalid credentials") {
-		return "Invalid email or password"
+	if !validExts[ext] {
+		return errors.New("invalid file type. allowed: jpg, jpeg, png, webp")
 	}
 
-	if strings.Contains(errStr, "not found") {
-		return "User not found"
-	}
-
-	return "Something went wrong. Please try again"
+	return nil
 }
