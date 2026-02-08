@@ -1,7 +1,7 @@
 # Makefile for GoTodo
 # Usage: run `make <target>`
 
-.PHONY: help tidy build run run-api test lint swag swag-run air install-air docker-build docker-run fmt clean
+.PHONY: help tidy build run run-api test lint air install-air docker-build docker-run fmt clean
 
 ## help: Show this help
 help:
@@ -34,12 +34,7 @@ lint:
 fmt:
 	go fmt ./...
 
-## swag: Generate Swagger docs (requires `swag` installed)
-swag:
-	$$(go env GOPATH)/bin/swag init -g cmd/api/main.go
 
-## swag-run: Generate Swagger docs then run
-swag-run: swag run ## Generate Swagger docs then run server
 
 ## install-air: Install Air live-reload tool
 install-air:

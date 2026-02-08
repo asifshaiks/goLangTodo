@@ -1,8 +1,6 @@
 // ================== internal/features/auth/handler.go ==================
 package auth
 
-// Swagger API metadata is defined globally in cmd/api/main.go
-
 import (
 	"github.com/xyz-asif/gotodo/internal/config"
 	"github.com/xyz-asif/gotodo/internal/pkg/response"
@@ -24,6 +22,7 @@ func NewHandler(repo *Repository) *Handler {
 	}
 }
 
+<<<<<<< HEAD
 // Register godoc
 // @Summary Register a new user
 // @Description Register a new user with email, password, and name
@@ -35,6 +34,9 @@ func NewHandler(repo *Repository) *Handler {
 // @Failure 400 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
 // @Router /auth/register [post]
+=======
+// Register a new user
+>>>>>>> 806303a8159a1e7e43283893915645288d70f04c
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -90,6 +92,7 @@ func (h *Handler) Register(c *gin.Context) {
 	})
 }
 
+<<<<<<< HEAD
 // Login godoc
 // @Summary Login user
 // @Description Authenticate user with email and password
@@ -102,6 +105,9 @@ func (h *Handler) Register(c *gin.Context) {
 // @Failure 401 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
 // @Router /auth/login [post]
+=======
+// Login user
+>>>>>>> 806303a8159a1e7e43283893915645288d70f04c
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -144,6 +150,7 @@ func (h *Handler) Login(c *gin.Context) {
 	})
 }
 
+<<<<<<< HEAD
 // Me godoc
 // @Summary Get current user profile
 // @Description Get the profile of the currently authenticated user
@@ -156,6 +163,9 @@ func (h *Handler) Login(c *gin.Context) {
 // @Failure 404 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
 // @Router /auth/me [get]
+=======
+// Me returns current user profile
+>>>>>>> 806303a8159a1e7e43283893915645288d70f04c
 func (h *Handler) Me(c *gin.Context) {
 	userID := c.GetString("userID")
 
